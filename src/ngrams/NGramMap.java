@@ -24,6 +24,9 @@ public class NGramMap {
     public TreeMap<String, TimeSeries> wordMap = new TreeMap<>();
     TimeSeries counts = new TimeSeries();
 
+    public NGramMap() {
+        //?
+    }
     /**
      * Constructs an NGramMap from WORDSFILENAME and COUNTSFILENAME.
      */
@@ -116,7 +119,6 @@ public class NGramMap {
      * TimeSeries.
      */
     public TimeSeries weightHistory(String word) {
-        // TODO: Fill in this method.
         if (!wordMap.containsKey(word)) return new TimeSeries();
         TimeSeries ts = wordMap.get(word).dividedBy(counts);
         return new TimeSeries(ts, ts.firstKey(), ts.lastKey());

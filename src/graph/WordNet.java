@@ -1,5 +1,8 @@
 package graph;
 
+import ngrams.NGramMap;
+import ngrams.TimeSeries;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -18,6 +21,7 @@ public class WordNet {
 
     public TreeMap<Integer, TreeSet<Integer>> graph;
     public Synset table;
+    public NGramMap map;
 
     /**
      * Creates a WordNet obj with empty graph.
@@ -26,19 +30,20 @@ public class WordNet {
     public WordNet() {
         graph = new TreeMap<>();
         table = new Synset();
+        map = new NGramMap();
     }
 
     /**
      * Create a WordNet obj by reading the txt files at the provided path.
      * Runtime would simply be M + N, size of the two dataset
-     * @param path that points to the hyponym data set
-     * @param tablePath that points to the set of words
+     * @param hyponymPath that points to the hyponym data set
+     * @param synsetPath that points to the set of words
      * @author me
      */
-    public WordNet(String path, String tablePath) {
-        table = new Synset(tablePath);
+    public WordNet(String hyponymPath, String synsetPath, String wordFrequencyPath, String countPath) {
+        table = new Synset(synsetPath);
         graph = new TreeMap<>();
-        File file = new File(path);
+        File file = new File(hyponymPath);
         try {
             Scanner read = new Scanner(file);
             while (read.hasNextLine()) {
@@ -61,6 +66,7 @@ public class WordNet {
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
+        map = new NGramMap(wordFrequencyPath, countPath);
     }
 
     /**
@@ -115,6 +121,25 @@ public class WordNet {
         return list;
     }
 
+    public List<String> hyponyms(String word, int startYear, int endYear, int k) {
+        if (k == 0) return hyponyms(word);
+        List<String> list = hyponyms(word);
+        TreeMap<String, Double> mapping = new TreeMap<>();
+
+        for (String w : list) {
+            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order garenteed
+        }
+        List<Map.Entry<String, Double>> toList = new ArrayList<>(mapping.entrySet());
+        toList.sort( Map.Entry.comparingByValue());
+        toList = toList.reversed();
+        Iterator<Map.Entry<String, Double>> it =  toList.iterator();
+        List<String> returnList = new ArrayList<>();
+        for (k = k; k != 0 && it.hasNext(); k--) returnList.add(it.next().getKey());
+        return returnList;
+
+
+    }
+
     /**
      * em helper class to alphabetically sort the lists
      */
@@ -159,6 +184,7 @@ public class WordNet {
      */
     public List<String> hyponyms(List<String> list) {
         if (list == null) return new ArrayList<>();
+        if (list.size() == 1) return hyponyms(list.get(0));
         String[] array = list.toArray(new String[0]);
         return hyponyms(array);
     }
@@ -179,4 +205,11 @@ public class WordNet {
         return connected;
     }
 
-}
+    public static class TComparator implements Comparator<TimeSeries> {
+        @Override
+        public int compare(TimeSeries o1, TimeSeries o2) {
+            return (int) o2.popularity() - (int) o1.popularity();
+            // casting both double to int. If they are counts they should be x.0, so no loss of information.
+        }
+    }
+{}}

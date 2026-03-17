@@ -38,7 +38,6 @@ public class TimeSeries extends TreeMap<Integer, Double> {
      * Returns all years for this TimeSeries (in any order).
      */
     public List<Integer> years() {
-        // TODO: Fill in this method.
         return new ArrayList<>(this.keySet());
         // started from an iteration to three lines of code to just one line of very concise func call
 //        return null;
@@ -49,7 +48,6 @@ public class TimeSeries extends TreeMap<Integer, Double> {
      * Must be in the same order as years().
      */
     public List<Double> data() {
-        // TODO: Fill in this method.
         // same order as years, so just use years
 //        List<Double> list = new ArrayList<>();
 //        for (int i : this.years()) {
@@ -129,6 +127,16 @@ public class TimeSeries extends TreeMap<Integer, Double> {
         return newts;
     }
 
-    // TODO: Add any private helper methods.
-    // TODO: Remove all TODO comments before submitting.
+    /**
+     * Supposedly returns the total appearance of this Ts over its entire time period. Not considering start and end
+     * year because in design the Ts should have proper time period when created.
+     * @return the total appearance count of this, word?
+     */
+    public double popularity() {
+        double sum = 0;
+        for (Double value : this.values()) sum += value;
+        return sum;
+    }
+
+    // I don't think I used any helper methods
 }
