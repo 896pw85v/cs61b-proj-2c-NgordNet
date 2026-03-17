@@ -2,6 +2,7 @@ package main;
 
 import browser.NgordnetQuery;
 import browser.NgordnetQueryHandler;
+import browser.NgordnetQueryType;
 import graph.WordNet;
 import org.checkerframework.checker.units.qual.A;
 
@@ -21,7 +22,11 @@ public class HyponymsHandler extends NgordnetQueryHandler {
         int start = q.startYear();
         int end = q.endYear();
         int k = q.k();
-        return String.valueOf(net.hyponyms(words.get(0), start, end, k));
-//        return String.join(",", net.hyponyms(words));
+        NgordnetQueryType type = q.ngordnetQueryType();
+        return
+            switch (type) {
+                case NgordnetQueryType.HYPONYMS -> String.valueOf(net.hyponyms(words, start, end, k));
+                case NgordnetQueryType.ANCESTORS -> String.valueOf(net.ancestors(words, start, end, k));
+            }; // what is this valueOf
     }
 }

@@ -88,6 +88,16 @@ public class WordNet {
         return graph.get(i);
     }
 
+    public TreeSet<Integer> getAllChildKeys(int i) {
+        if (!graph.containsKey(i)) return new TreeSet<>();
+        TreeSet<Integer> directChildren = graph.get(i);
+        TreeSet<Integer> res = new TreeSet<>(directChildren);
+        for (int directChild : directChildren) {
+            res.addAll(getAllChildKeys(directChild));
+        }
+        return res;
+    }
+
     /**
      * a recursive approach that gets all the hyponyms in words not indices. Does not include
      * the current index, ordered in the order of the words being added to the list. Strictly
@@ -121,20 +131,45 @@ public class WordNet {
         return list;
     }
 
+    /**
+     * Probably the real entry for api. search for top k hyponyms of the word with the most popularity, means highest
+     * appearances from startYear to endYear. Hyponyms relationship and word history are not managed by the same dataset,
+     * so result is not perfect.
+     * @param word parent word
+     * @param startYear start of the time period to count appearances
+     * @param endYear end year of the time period to count appearances, included
+     * @param k the maximum size of the return list
+     * @return a list with the top k result ordered alphabetically
+     * @implNote
+     * Gets hyponyms by G size of graph, gets counts by same G TimeSeries thankfully it's constant time, gets creates
+     * mapping of G size, convert to list of G size, sort by G log(G), probably G for reversing, iterating takes at
+     * most k times, alphabetical sorting takes G log(G), in total 5G + k + 2G log(G). Maybe this can be cut by one G
+     * but the sorting and mappings, etc., cannot be cut since spec requires so.
+     */
     public List<String> hyponyms(String word, int startYear, int endYear, int k) {
         if (k == 0) return hyponyms(word);
+        // get hyponyms of this word
         List<String> list = hyponyms(word);
-        TreeMap<String, Double> mapping = new TreeMap<>();
 
+        // create a mapping of hyponym -> their appearance count
+        TreeMap<String, Double> mapping = new TreeMap<>();
         for (String w : list) {
-            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order garenteed
+            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order guaranteed
         }
+
+        // here goes the trick to sort by value of a map
         List<Map.Entry<String, Double>> toList = new ArrayList<>(mapping.entrySet());
-        toList.sort( Map.Entry.comparingByValue());
-        toList = toList.reversed();
+        toList.sort( Map.Entry.comparingByValue()); // passed in comparator from Map.Entry two classes imported
+        toList = toList.reversed(); // reverse order so higher appearance values at front
+
+        // use iterator to get top k or all elements, add to a list
         Iterator<Map.Entry<String, Double>> it =  toList.iterator();
         List<String> returnList = new ArrayList<>();
         for (k = k; k != 0 && it.hasNext(); k--) returnList.add(it.next().getKey());
+
+        // sort again by alphabetical order
+        returnList.sort(new WComparator());
+
         return returnList;
 
 
@@ -184,9 +219,79 @@ public class WordNet {
      */
     public List<String> hyponyms(List<String> list) {
         if (list == null) return new ArrayList<>();
-        if (list.size() == 1) return hyponyms(list.get(0));
+        if (list.size() == 1) return hyponyms(list.getFirst());
         String[] array = list.toArray(new String[0]);
         return hyponyms(array);
+    }
+
+    /**
+     * Return a list of common hyponyms of words provided that are most popular between start and end year.
+     * @param words parent words
+     * @param startYear start of time period
+     * @param endYear end of time period
+     * @param k max size of return list
+     * @return top k most popular hyponyms in alphabetical order
+     */
+    public List<String> hyponyms(List<String> words, int startYear, int endYear, int k) {
+        List<String> list = hyponyms(words);
+        if (k == 0) return list;
+        // create a mapping of hyponym -> their appearance count
+        TreeMap<String, Double> mapping = new TreeMap<>();
+        for (String w : list) {
+            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order guaranteed
+        }
+
+        // here goes the trick to sort by value of a map
+        List<Map.Entry<String, Double>> toList = new ArrayList<>(mapping.entrySet());
+        toList.sort( Map.Entry.comparingByValue()); // passed in comparator from Map.Entry two classes imported
+        toList = toList.reversed(); // reverse order so higher appearance values at front
+
+        // use iterator to get top k or all elements, add to a list
+        Iterator<Map.Entry<String, Double>> it =  toList.iterator();
+        List<String> returnList = new ArrayList<>();
+        for (k = k; k != 0 && it.hasNext(); k--) returnList.add(it.next().getKey());
+
+        // sort again by alphabetical order
+        returnList.sort(new WComparator());
+
+        return returnList;
+    }
+
+    // this is the biggest bottleneck, exactly why the design is so wrong, and this implementation is wrong
+    // It works by getting every index (node) with word, which is fully O(N)
+    // then for every key k in graph G, search all kids of k in O(G), if k contains all the nodes with word, add it to
+    // return list.
+    // This is exactly what we are not supposed to do. And the isParent() is still unused
+    public List<String> ancestors(String word) {
+        TreeSet<Integer> children = table.getIndices(word);
+        List<String> parents = new ArrayList<>();
+        for (int k : table.keys()) {
+            if (getAllChildKeys(k).containsAll(children)) parents.addAll(table.get(k));
+        }
+        parents.sort(new WComparator());
+        return parents;
+    }
+
+    public List<String> ancestors(List<String> words) {
+        if (words == null) return new ArrayList<>();
+        if (words.size() == 1) return ancestors(words.getFirst());
+        Set<String> set = new TreeSet<>(this.hyponyms(words.getFirst()));
+        Set<String> temp = new TreeSet<>();
+        for (String word : words) {
+            for (String w : this.hyponyms(word)) {
+                if (set.contains(w)) temp.add(w);
+            }
+            set = temp;
+            temp = new TreeSet<>();
+        }
+        List<String> list = new ArrayList<>(set);
+        list.sort(new WComparator());
+        return list;
+    }
+
+    public List<String> ancestors(List<String> words, int startYear, int endYear, int k) {
+        if (k == 0) return ancestors(words);
+        return kProcessor(ancestors(words), startYear, endYear, k);
     }
 
     /**
@@ -197,11 +302,11 @@ public class WordNet {
      * @param j the target node
      * @return boolean value true if j is a child of i, vice versa
      */
-    public boolean isConnected(int i, int j) {
+    public boolean isParentOf(int i, int j) {
         TreeSet<Integer> set = this.getChildKeys(i);
         if (set.contains(j)) return true;
         boolean connected = false;
-        for (int child : set) connected = connected || isConnected(child, j);
+        for (int child : set) connected = connected || isParentOf(child, j);
         return connected;
     }
 
@@ -212,4 +317,28 @@ public class WordNet {
             // casting both double to int. If they are counts they should be x.0, so no loss of information.
         }
     }
-{}}
+
+    private List<String> kProcessor(List<String> list, int startYear, int endYear, int k) {
+
+        // create a mapping of hyponym -> their appearance count
+        TreeMap<String, Double> mapping = new TreeMap<>();
+        for (String w : list) {
+            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order guaranteed
+        }
+
+        // here goes the trick to sort by value of a map
+        List<Map.Entry<String, Double>> toList = new ArrayList<>(mapping.entrySet());
+        toList.sort( Map.Entry.comparingByValue()); // passed in comparator from Map.Entry two classes imported
+        toList = toList.reversed(); // reverse order so higher appearance values at front
+
+        // use iterator to get top k or all elements, add to a list
+        Iterator<Map.Entry<String, Double>> it =  toList.iterator();
+        List<String> returnList = new ArrayList<>();
+        for (int i = k; k != i || it.hasNext(); i++) returnList.add(it.next().getKey());
+
+        // sort again by alphabetical order
+        returnList.sort(new WComparator());
+
+        return returnList;
+    }
+}

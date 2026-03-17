@@ -76,4 +76,8 @@ public class Synset {
         }
         return indices;
     }
+
+    public TreeSet<Integer> keys() {
+        return new TreeSet<Integer>(table.keySet());
+    }
 }
