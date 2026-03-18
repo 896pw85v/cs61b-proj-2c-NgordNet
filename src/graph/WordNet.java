@@ -265,8 +265,13 @@ public class WordNet {
     public List<String> ancestors(String word) {
         TreeSet<Integer> children = table.getIndices(word);
         List<String> parents = new ArrayList<>();
+        for (int i : children) parents.addAll(table.get(i));
         for (int k : table.keys()) {
-            if (getAllChildKeys(k).containsAll(children)) parents.addAll(table.get(k));
+            for (int child : children) {
+                if (isParentOf(k, child)) {
+                    parents.addAll(table.get(k));
+                }
+            }
         }
         parents.sort(new WComparator());
         return parents;
