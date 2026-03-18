@@ -1,7 +1,6 @@
 package graph;
 
 import ngrams.NGramMap;
-import ngrams.TimeSeries;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -50,11 +49,11 @@ public class WordNet {
                 String line = read.nextLine();
                 String[] tokens = line.split(",");
                 String[] words = Arrays.copyOfRange(tokens,1, tokens.length);
-                Integer[] wordz = new Integer[words.length];
+                Integer[] indices = new Integer[words.length];
                 for (int i = 0; i < words.length; i++) {
-                    wordz[i] = Integer.parseInt(words[i]);
+                    indices[i] = Integer.parseInt(words[i]);
                 }
-                TreeSet<Integer> hypo = new TreeSet<>(List.of(wordz));
+                TreeSet<Integer> hypo = new TreeSet<>(List.of(indices));
                 int i = Integer.parseInt(tokens[0]);
                 if (graph.get(i) == null) graph.put(i, hypo);
                 else {
@@ -88,6 +87,7 @@ public class WordNet {
         return graph.get(i);
     }
 
+    // reserve as a maybe helpful helper method
     public TreeSet<Integer> getAllChildKeys(int i) {
         if (!graph.containsKey(i)) return new TreeSet<>();
         TreeSet<Integer> directChildren = graph.get(i);
@@ -129,50 +129,6 @@ public class WordNet {
         List<String> list = new ArrayList<>(set);
         list.sort(new WComparator());
         return list;
-    }
-
-    /**
-     * Probably the real entry for api. search for top k hyponyms of the word with the most popularity, means highest
-     * appearances from startYear to endYear. Hyponyms relationship and word history are not managed by the same dataset,
-     * so result is not perfect.
-     * @param word parent word
-     * @param startYear start of the time period to count appearances
-     * @param endYear end year of the time period to count appearances, included
-     * @param k the maximum size of the return list
-     * @return a list with the top k result ordered alphabetically
-     * @implNote
-     * Gets hyponyms by G size of graph, gets counts by same G TimeSeries thankfully it's constant time, gets creates
-     * mapping of G size, convert to list of G size, sort by G log(G), probably G for reversing, iterating takes at
-     * most k times, alphabetical sorting takes G log(G), in total 5G + k + 2G log(G). Maybe this can be cut by one G
-     * but the sorting and mappings, etc., cannot be cut since spec requires so.
-     */
-    public List<String> hyponyms(String word, int startYear, int endYear, int k) {
-        if (k == 0) return hyponyms(word);
-        // get hyponyms of this word
-        List<String> list = hyponyms(word);
-
-        // create a mapping of hyponym -> their appearance count
-        TreeMap<String, Double> mapping = new TreeMap<>();
-        for (String w : list) {
-            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order guaranteed
-        }
-
-        // here goes the trick to sort by value of a map
-        List<Map.Entry<String, Double>> toList = new ArrayList<>(mapping.entrySet());
-        toList.sort( Map.Entry.comparingByValue()); // passed in comparator from Map.Entry two classes imported
-        toList = toList.reversed(); // reverse order so higher appearance values at front
-
-        // use iterator to get top k or all elements, add to a list
-        Iterator<Map.Entry<String, Double>> it =  toList.iterator();
-        List<String> returnList = new ArrayList<>();
-        for (k = k; k != 0 && it.hasNext(); k--) returnList.add(it.next().getKey());
-
-        // sort again by alphabetical order
-        returnList.sort(new WComparator());
-
-        return returnList;
-
-
     }
 
     /**
@@ -235,41 +191,27 @@ public class WordNet {
     public List<String> hyponyms(List<String> words, int startYear, int endYear, int k) {
         List<String> list = hyponyms(words);
         if (k == 0) return list;
-        // create a mapping of hyponym -> their appearance count
-        TreeMap<String, Double> mapping = new TreeMap<>();
-        for (String w : list) {
-            mapping.put(w, map.countHistory(w, startYear, endYear).popularity()); // order guaranteed
-        }
-
-        // here goes the trick to sort by value of a map
-        List<Map.Entry<String, Double>> toList = new ArrayList<>(mapping.entrySet());
-        toList.sort( Map.Entry.comparingByValue()); // passed in comparator from Map.Entry two classes imported
-        toList = toList.reversed(); // reverse order so higher appearance values at front
-
-        // use iterator to get top k or all elements, add to a list
-        Iterator<Map.Entry<String, Double>> it =  toList.iterator();
-        List<String> returnList = new ArrayList<>();
-        for (k = k; k != 0 && it.hasNext(); k--) returnList.add(it.next().getKey());
-
-        // sort again by alphabetical order
-        returnList.sort(new WComparator());
-
-        return returnList;
+        return kProcessor(list, startYear, endYear, k);
     }
 
-    // this is the biggest bottleneck, exactly why the design is so wrong, and this implementation is wrong
-    // It works by getting every index (node) with word, which is fully O(N)
-    // then for every key k in graph G, search all kids of k in O(G), if k contains all the nodes with word, add it to
-    // return list.
-    // This is exactly what we are not supposed to do. And the isParent() is still unused
+    /**
+     * gets ancestors of every node containing the given word.
+     * @implNote this is the biggest bottleneck, exactly why the design is so wrong, and this implementation is wrong
+     * It works by getting every index (node) with word, which is fully O(N)
+     * then for every key k in graph G, search all kids of k in O(G), if k contains all the nodes with word, add it to
+     * return list.
+     * This is exactly what we are not supposed to do. And the isParent() is still unused
+     * @param word the child word
+     * @return a list of the parents, including the nodes containing the word
+     */
     public List<String> ancestors(String word) {
         TreeSet<Integer> children = table.getIndices(word);
         List<String> parents = new ArrayList<>();
-        for (int i : children) parents.addAll(table.get(i));
+        for (int i : children) parents.addAll(get(i));
         for (int k : table.keys()) {
             for (int child : children) {
                 if (isParentOf(k, child)) {
-                    parents.addAll(table.get(k));
+                    parents.addAll(get(k));
                 }
             }
         }
@@ -277,6 +219,11 @@ public class WordNet {
         return parents;
     }
 
+    /**
+     * gets ancestors of the all the words provided, works by obtaining the common set of ancestors of different words
+     * @param words the list of words to find common ancestors
+     * @return list of common ancestors,
+     */
     public List<String> ancestors(List<String> words) {
         if (words == null) return new ArrayList<>();
         if (words.size() == 1) return ancestors(words.getFirst());
@@ -294,6 +241,14 @@ public class WordNet {
         return list;
     }
 
+    /**
+     * works as the entry for ancestors methods set
+     * @param words children
+     * @param startYear start
+     * @param endYear end of time period
+     * @param k max size of result
+     * @return common ancestors of provided words
+     */
     public List<String> ancestors(List<String> words, int startYear, int endYear, int k) {
         if (k == 0) return ancestors(words);
         return kProcessor(ancestors(words), startYear, endYear, k);
@@ -315,14 +270,21 @@ public class WordNet {
         return connected;
     }
 
-    public static class TComparator implements Comparator<TimeSeries> {
-        @Override
-        public int compare(TimeSeries o1, TimeSeries o2) {
-            return (int) o2.popularity() - (int) o1.popularity();
-            // casting both double to int. If they are counts they should be x.0, so no loss of information.
-        }
-    }
-
+    /**
+     * Processes the provided list of strings by sorting by popularity at first, then extract the top k items, again
+     * sort alphabetically.
+     * @param list a list of words prepared by other methods
+     * @param startYear start of time period
+     * @param endYear end of time period
+     * @param k max size of result
+     * @return a processed list of at most k or less, or all, of the items of the provided list, sorted by popularity
+     * @implNote
+     * Even though hyponyms/ancestors are not obtained in this list, but ultimately the passed in list costs by G size
+     * of graph, gets counts by same G TimeSeries thankfully it's constant time, gets creates mapping of G size, convert
+     * to list of G size, sort by G log(G), probably G for reversing, iterating takes at most k times, alphabetical
+     * sorting takes G log(G), in total 5G + k + 2G log(G). Maybe this can be cut by one G  but the sorting and mappings,
+     * etc., cannot be cut since spec requires so.
+     */
     private List<String> kProcessor(List<String> list, int startYear, int endYear, int k) {
 
         // create a mapping of hyponym -> their appearance count
