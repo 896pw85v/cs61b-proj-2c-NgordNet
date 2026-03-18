@@ -6,13 +6,9 @@ import java.util.TreeMap;
 import java.util.Scanner;
 import java.io.File;
 
-import static ngrams.TimeSeries.MAX_YEAR;
-import static ngrams.TimeSeries.MIN_YEAR;
-
 /**
  * An object that provides utility methods for making queries on the
- * Google NGrams dataset (or a subset thereof).
- *
+ * Google Ngrams dataset (or a subset thereof).
  * An NGramMap stores pertinent data from a "words file" and a "counts
  * file". It is not a map in the strict sense, but it does provide additional
  * functionality.
@@ -129,9 +125,7 @@ public class NGramMap {
      * ENDYEAR, inclusive of both ends. If a word does not exist in this time frame, ignore it
      * rather than throwing an exception.
      */
-    public TimeSeries summedWeightHistory(Collection<String> words,
-                                          int startYear, int endYear) {
-        // TODO: Fill in this method.
+    public TimeSeries summedWeightHistory(Collection<String> words, int startYear, int endYear) {
         TimeSeries ts = new TimeSeries();
         for (String word : words) {
             TimeSeries copy = new TimeSeries(wordMap.get(word), startYear, endYear);
@@ -145,16 +139,12 @@ public class NGramMap {
      * exist in this time frame, ignore it rather than throwing an exception.
      */
     public TimeSeries summedWeightHistory(Collection<String> words) {
-        // TODO: Fill in this method.
         TimeSeries ts = new TimeSeries();
         for (String word : words) {
             ts = wordMap.get(word).plus(ts);
         }
         return ts.dividedBy(counts);
-//        return null;
     }
 
-    // TODO: Add any private helper methods.
-    // TODO: Remove all TODO comments before submitting.
-    // no way
+    // no way. did not do my own test.
 }
